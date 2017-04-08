@@ -1,0 +1,174 @@
+---
+title: "KR1"
+author: "Maxim H"
+date: "April 8, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(DESeq2)
+library(ggplot2)
+library(pheatmap)
+library(amap)
+library(VennDiagram)
+```
+
+```{r load}
+counts <- read.table("GSE89633_counts.tsv", row.names=1, sep = '\t', header = T)
+conditions <- read.table("GSE89633_conditions.tsv", row.names=1, header = T, sep = '\t')
+```
+
+```{r deseq_prep, cache=TRUE, message=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = conditions,
+                              design = ~ conditions + cells)
+#dds <- dds[rowSums(counts(dds)) > 20, ]
+dds <- DESeq(dds)
+vst_dds <- vst(dds)
+counts.norm <- assay(vst_dds)
+```
+# PCA of all genes
+```{r PCA}
+plotPCA(vst_dds, intgroup=c("conditions", "cells")) + theme_bw()
+```
+
+## Похоже бодбшая часть вариации объясняется клеточным типом
+
+# Heatmap of 8000
+```{r deseq_prep_kmeans, cache=TRUE, message=FALSE}
+dds8 <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = conditions,
+                              design = ~ conditions + cells)
+dds8 <- dds[head(order(rowSums(counts(dds)), decreasing = T), n=8000), ]
+dds8 <- DESeq(dds8)
+rlog_dds <- rlog(counts(dds8))
+rownames(rlog_dds) <- rownames(dds8)
+
+clustering  <- Kmeans(rlog_dds, method =  "correlation", centers = 8, iter.max = 20000)
+clusters <- as.data.frame(clustering$cluster)
+colnames(clusters) <- c('cluster')
+clusters$cluster <- as.factor(clusters$cluster)
+rownames(clusters) <- rownames(rlog_dds)
+
+counts.norm <- counts(dds8, normalized=TRUE)
+
+to_visualise <- counts.norm[order(clusters$cluster), order(conditions[, 2],conditions[, 1])]
+
+to_visualise <- t(apply(to_visualise, 1, function(r) {
+  (r - min(r)) / (max(r) - min(r))
+}))
+
+pheatmap(to_visualise, 
+         show_rownames = F, cluster_rows = F,
+         cluster_cols=F,
+         annotation_col = conditions,
+         annotation_row = clusters)
+```
+
+## Аутлаеров вроде не видно
+
+# Diff expression
+
+```{r diff_exp, cache=T, message=F}
+
+fapcon <- subset(conditions, cells=="cell type: FAP")
+FAP <- counts[, colnames(counts) %in% rownames(fapcon)]
+
+fbcon <- subset(conditions, cells=="cell type: FB")
+FB <- counts[, colnames(counts) %in% rownames(fbcon)]
+
+smpcon <- subset(conditions, cells=="cell type: SMP")
+SMP <- counts[, colnames(counts) %in% rownames(smpcon)]
+
+fap <- DESeqDataSetFromMatrix(countData = FAP,
+                              colData = fapcon,
+                              design = ~ conditions)
+fap <- fap[rowSums(counts(fap)) > 20, ]
+fap <- DESeq(fap)
+fb <- DESeqDataSetFromMatrix(countData = FB,
+                              colData = fbcon,
+                              design = ~ conditions)
+fb <- dds[rowSums(counts(fb)) > 20, ]
+fb <- DESeq(fb)
+smp <- DESeqDataSetFromMatrix(countData = SMP,
+                              colData = smpcon,
+                              design = ~ conditions )
+smp <- smp[rowSums(counts(smp)) > 20, ]
+smp <- DESeq(smp)
+
+res1 <- results(fap, contrast = list(c('conditionscondition..DKO'), c('conditionscondition..WT')))
+res1 <- res1[order(res1[, 4]), ]
+
+res2 <- results(fb, contrast = list(c('conditionscondition..DKO'), c('conditionscondition..WT')))
+res2 <- res2[order(res2[, 4]), ]
+
+res3 <- results(smp, contrast = list(c('conditionscondition..DKO'), c('conditionscondition..WT')))
+res3 <- res3[order(res3[, 4]), ]
+```
+
+# Volcano
+
+```{r volcano_plot}
+gdata1 <- data.frame(
+  x=res1$log2FoldChange,
+  y=-log10(res1$padj),
+  z = 'FAP'
+)
+
+gdata2 <- data.frame(
+  x=res2$log2FoldChange,
+  y=-log10(res2$padj),
+  z = 'FB'
+)
+
+gdata3 <- data.frame(
+  x=res3$log2FoldChange,
+  y=-log10(res3$padj),
+  z = 'SMP'
+)
+
+gdata <- rbind.data.frame(gdata1, gdata2, gdata3)
+
+ggplot(data=gdata, aes(x=x, y=y, color=factor(ifelse(y > -log10(0.01), 1, 2)))) +
+  geom_point(size=1) + theme_bw()  +
+  xlab("Log fold change") +
+  ylab("Adjusted p.value") +
+  scale_colour_manual(values=c('red', 'black'), name = 'significance', labels = c('significant','not significant', '')) +
+  #guides(color=FALSE) +
+  geom_hline(color='red', yintercept = -log10(0.01), linetype="dashed") +
+  facet_grid(. ~ z)
+
+```
+
+## В SMP распределение шире, так что там изменение экспрессии выше. В FB меньше всех
+
+# Venn diagrams
+
+```{r venn, message=F}
+setA <- rownames(res1)[res1$padj < 0.01]
+setA <- setA[!is.na(setA)]
+setB <- rownames(res2)[res2$padj < 0.01]
+setB <- setB[!is.na(setB)]
+setC <- rownames(res3)[res3$padj < 0.01]
+setC <- setC[!is.na(setC)]
+
+n12 <- intersect(setA, setB)
+n23 <- intersect(setB, setC)
+n13 <- intersect(setA, setC)
+n123 <- intersect(intersect(setA, setB), setC)
+
+
+
+draw.triple.venn(length(setA), length(setB), length(setB), length(n12),
+                 length(n23),
+                 length(n13),
+                 length(n123), category = c("FAP", "FB", "SMP"), fill = c('red','blue', 'green'), col = F, alpha = 0.5, cat.pos = 0)
+```
+
+
+
+
+
+
+
+
