@@ -554,15 +554,15 @@ order by n_songs desc
 </ol>
 <pre class="r"><code>dbGetQuery(mydb, &quot;SELECT Artists.name, Albums.name, Songs.name, count(DISTINCT Listened.start_time)  as n_listened FROM 
            Artists join Albums on Albums.artist_id = Artists.id join Songs on Songs.album_id = Albums.id join Listened on Listened.song_id = Songs.id
-           group by Artists.name, Albums.name, Songs.name
+           group by  Songs.id
            order by n_listened desc
            limit 5;&quot;)</code></pre>
-<pre><code>##               name                                         name           name n_listened
-## 1         LifeLoop Salon Bruit - Berlin Retrospective 2002-2011       Untitled         51
-## 2   Carol Kane (3)                                 The Crucible       Untitled         35
-## 3    Peter Elflein                                 Hal 9000 1+2       Untitled         14
-## 4      Tina Packer                                 Yeti Attack! Opening Titles         14
-## 5 Frank Alterskjær              Stopp! (Siste Skive Fra Graven)            Dop         12</code></pre>
+<pre><code>##                        name                                       name                          name n_listened
+## 1        Ramón Roig y Torné                         Suspiros De España             La Gracia De Dios          7
+## 2          Frank Alterskjær            Stopp! (Siste Skive Fra Graven)                           Dop          7
+## 3                  LifeLoop    Smell The Stench Second Net Compilation Dogma Tricks And Shitty Dicks          7
+## 4           Maarten De Kock Ibiza Party Megamix 2013 - Best Of Summer!        The Machine (Mix Edit)          7
+## 5 Tipi &amp; Sylvester Stallone                         Operaatio Turnipsi             Kuurolle Hiirelle          7</code></pre>
 <ol start="10" style="list-style-type: decimal">
 <li>Найдите год, такой что песни, выпущенные в этом году, слушают боль- ше всего (год|количество прослушиваний)</li>
 </ol>

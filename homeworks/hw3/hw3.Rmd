@@ -92,7 +92,7 @@ dbGetQuery(mydb, "SELECT Artists.name, Albums.name, total(Songs.duration) / coun
 ```{r}
 dbGetQuery(mydb, "SELECT Artists.name, Albums.name, Songs.name, count(DISTINCT Listened.start_time)  as n_listened FROM 
            Artists join Albums on Albums.artist_id = Artists.id join Songs on Songs.album_id = Albums.id join Listened on Listened.song_id = Songs.id
-           group by Artists.name, Albums.name, Songs.name
+           group by  Songs.id
            order by n_listened desc
            limit 5;")
 ```
