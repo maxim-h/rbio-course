@@ -230,14 +230,14 @@ options(width=500)</code></pre>
 <pre class="r"><code>dbGetQuery(mydb, &quot;SELECT * FROM 
            Listened join Users where Listened.user_id = Users.id  
            group by Username
-           order by count(DISTINCT song_id) desc
+           order by count(DISTINCT start_time) desc
            limit 5;&quot;)</code></pre>
-<pre><code>##   user_id song_id          start_time id         username          registered
-## 1       4     262 2015-10-31 23:56:33  4   Mary_Sanguinar 2007-06-24 15:55:31
-## 2       5    2765 2005-01-03 04:44:11  5  Nat_Whisperwind 2009-07-26 04:22:27
-## 3      20     864 2009-05-22 02:47:32 20 John_Cloudsinger 2003-10-04 14:43:12
-## 4      38     302 2004-06-01 22:10:46 38      Anna_Potter 2009-10-14 12:27:36
-## 5      13    6353 2013-03-18 23:45:05 13    Bob_Gorefiend 2016-01-02 22:09:20</code></pre>
+<pre><code>##   user_id song_id          start_time id          username          registered
+## 1       4     262 2015-10-31 23:56:33  4    Mary_Sanguinar 2007-06-24 15:55:31
+## 2       5    2765 2005-01-03 04:44:11  5   Nat_Whisperwind 2009-07-26 04:22:27
+## 3      38     302 2004-06-01 22:10:46 38       Anna_Potter 2009-10-14 12:27:36
+## 4      20     864 2009-05-22 02:47:32 20  John_Cloudsinger 2003-10-04 14:43:12
+## 5      53    7170 2015-06-06 18:40:35 53 Julia_Bronzebeard 2003-10-01 15:28:09</code></pre>
 <ol start="4" style="list-style-type: decimal">
 <li>Информацию об исполнителях и количестве их альбомов (имя исполнителя|число)</li>
 </ol>
@@ -554,24 +554,25 @@ order by n_songs desc
 </ol>
 <pre class="r"><code>dbGetQuery(mydb, &quot;SELECT Artists.name, Albums.name, Songs.name, count(DISTINCT Listened.start_time)  as n_listened FROM 
            Artists join Albums on Albums.artist_id = Artists.id join Songs on Songs.album_id = Albums.id join Listened on Listened.song_id = Songs.id
-           group by Artists.name, Albums.name
+           group by Artists.name, Albums.name, Songs.name
            order by n_listened desc
            limit 5;&quot;)</code></pre>
-<pre><code>##              name                                    name                                         name n_listened
-## 1     Tina Packer                            Yeti Attack!                       Scene 1: Cave Exterior        337
-## 2     Tina Packer                         The Web Of Fear Scene 3: Common Room, Goodge Street Fortress        199
-## 3 Maarten De Kock                    Clubhouse Megamix 02   Blood Pressure (EDX &amp; Leventina Radio Mix)        145
-## 4        LifeLoop Smell The Stench Second Net Compilation                                            I        137
-## 5 Maarten De Kock                    Clubhouse Megamix 05                                      Lumbers        123</code></pre>
+<pre><code>##               name                                         name           name n_listened
+## 1         LifeLoop Salon Bruit - Berlin Retrospective 2002-2011       Untitled         51
+## 2   Carol Kane (3)                                 The Crucible       Untitled         35
+## 3    Peter Elflein                                 Hal 9000 1+2       Untitled         14
+## 4      Tina Packer                                 Yeti Attack! Opening Titles         14
+## 5 Frank Alterskjær              Stopp! (Siste Skive Fra Graven)            Dop         12</code></pre>
 <ol start="10" style="list-style-type: decimal">
 <li>Найдите год, такой что песни, выпущенные в этом году, слушают боль- ше всего (год|количество прослушиваний)</li>
 </ol>
-<pre class="r"><code>dbGetQuery(mydb, 'SELECT strftime(&quot;%Y&quot;, Listened.start_time) as year, count(DISTINCT Listened.start_time)  as n_listened FROM Listened
-           group by strftime(&quot;%Y&quot;, start_time)
+<pre class="r"><code>dbGetQuery(mydb, 'SELECT Albums.release_year as year, count(DISTINCT Listened.start_time)  as n_listened FROM
+Albums join Songs on Songs.album_id = Albums.id join Listened on Listened.song_id = Songs.id
+           group by year
            order by n_listened desc
            limit 1;')</code></pre>
 <pre><code>##   year n_listened
-## 1 2009        760</code></pre>
+## 1 2003        920</code></pre>
 <ol start="11" style="list-style-type: decimal">
 <li>Для пользователя с id=47 найдите топ 20 последних прослушан- ных треков. (имя исполнителя|название альбома|название песни|когда)</li>
 </ol>
