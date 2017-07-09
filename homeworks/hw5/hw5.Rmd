@@ -1,0 +1,149 @@
+---
+title: "hw5"
+author: "Maxim Holmatov"
+date: '4 июля 2017 г '
+output: html_document
+---
+
+## Загрузка библиотек
+```{r setup}
+library(OpenImageR)
+library(mxnet)
+```
+
+
+## Разделение датасета на тренирующую и валидирующую выборки
+
+```{r warning=FALSE}
+set.seed(1)
+
+dataset.size <- 168
+
+training.size <- 134
+validation.size <- dataset.size - training.size
+training.set <- sample(1:dataset.size, training.size)
+validation.set <- (1:dataset.size)[-training.set]
+
+```
+
+## Искусственно увеличиваем датасет 
+
+```{r load data, warning=FALSE}
+lbls <- read.csv("patch_labels.csv", header = F)[, 1]
+
+features <- 61 * 61
+training.size <- 50 * 134
+validation.size <- 50 * 34
+
+train.x <- matrix(0, nrow=training.size, ncol=features)
+test.x  <- matrix(0, nrow=validation.size, ncol=features)
+train.y <- vector(length=training.size)
+test.y <- vector(length=validation.size)
+
+
+for (i in 1:length(training.set)) {
+  image <- readImage(sprintf("patches/patch%d.jpg", training.set[i]))
+  degrees <- sample(1:360, 50, replace = F)
+  shift_c <- sample(-5:5, 50, replace = T)
+  shift_r <- sample(-5:5, 50, replace = T)
+  for (j in 1:50) {
+    augmented <-  Augmentation(image, flip_mode = "horizontal",
+             shift_cols = shift_c[j], shift_rows = shift_r[j],
+             rotate_angle = degrees[j], rotate_method = 'bilinear', 
+             zca_comps = 30,zca_epsilon = 0.1, threads = 6, verbose = F)
+    train.x[(i - 1) * 50 + j, ] <- as.numeric(augmented)
+    train.y[(i - 1) * 50 + j] <- lbls[training.set[i]]
+  }
+}
+
+for (i in 1:length(validation.set)) {
+  image <- readImage(sprintf("patches/patch%d.jpg", validation.set[i]))
+  degrees <- sample(1:360, 50, replace = F)
+  shift_c <- sample(-5:5, 50, replace = T)
+  shift_r <- sample(-5:5, 50, replace = T)
+  for (j in 1:50) {
+    augmented <-  Augmentation(image, flip_mode = "horizontal",
+             shift_cols = shift_c[j], shift_rows = shift_r[j],
+             rotate_angle = degrees[j], rotate_method = 'bilinear', 
+             zca_comps = 30,zca_epsilon = 0.1, threads = 6, verbose = F)
+    test.x[(i - 1) * 50 + j, ] <- as.numeric(augmented)
+    test.y[(i - 1) * 50 + j] <- lbls[validation.set[i]]
+  }
+}
+
+
+
+dim(train.x)
+dim(test.x)
+
+
+```
+
+
+
+## Нормализуем данные и тренируем сеть 
+
+```{r warning=FALSE}
+
+train.array <- t(train.x)
+dim(train.array) <- c(61, 61, 1, ncol(train.array))
+test.array <- t(test.x)
+dim(test.array) <- c(61, 61, 1, ncol(test.array))
+
+new.train.array <- train.array / 3
+new.test.array <- test.array / 3
+
+data <- mx.symbol.Variable('data')
+do1 <- mx.symbol.Dropout(data = data, p = 0.1)
+conv.1 <- mx.symbol.Convolution(data = do1, kernel = c(5, 5), num_filter = 10)
+tanh.1 <- mx.symbol.Activation(data = conv.1, act_type = "tanh")
+pool.1 <- mx.symbol.Pooling(data=tanh.1, kernel=c(2, 2), stride=c(2, 2), pool.type="max")
+conv.2 <- mx.symbol.Convolution(data = pool.1, kernel = c(5, 5), num_filter = 10)
+tanh.2 <- mx.symbol.Activation(data = conv.2, act_type = "tanh")
+pool.2 <- mx.symbol.Pooling(data=tanh.2, kernel=c(2, 2), stride=c(2, 2), pool.type="max")
+
+
+fc.1 <- mx.symbol.FullyConnected(data = pool.2, num_hidden = 3)
+
+nn.model <- mx.symbol.SoftmaxOutput(data = fc.1)
+
+
+graph.viz(nn.model)
+
+```
+
+```{r, eval=FALSE, echo=TRUE}
+
+mx.set.seed(1)
+model <- mx.model.FeedForward.create(nn.model,
+                                     X=new.train.array,
+                                     y=as.array(train.y-1),
+                                     eval.data = list(
+                                       data=new.test.array,
+                                       label=as.array(test.y-1)
+                                     ),
+                                     ctx=mx.cpu(),
+                                     num.round = 500,
+                                     optimizer="adadelta",
+                                     eval.metric = mx.metric.accuracy,
+                                     epoch.end.callback = mx.callback.save.checkpoint("reload_chkpt"))
+
+```
+
+
+## Выбираем хороший вариант
+
+```{r}
+m <- mx.model.load("reload_chkpt", 477)
+
+pred_train <- apply(predict(m, new.train.array), 2, which.max)
+pred_test <- apply(predict(m, new.test.array), 2, which.max)
+
+
+tr = sum(pred_train == train.y)/length(pred_train)
+te = sum(pred_test == test.y)/length(pred_test)
+```
+
+Точность на тестовой выборке = `r tr`. На валидирующей = `r te`.
+
+### Ай, хорошо!
